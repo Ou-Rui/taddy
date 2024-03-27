@@ -56,6 +56,11 @@ def preprocessDataset(dataset):
 
 
 def generateDataset(dataset, snap_size, train_per=0.5, anomaly_per=0.01):
+  '''
+  snap_size: snapshot数量
+  train_per: 训练集边占总数的比例
+  '''
+  
   print('Generating data with anomaly for Dataset: ', dataset)
   if not os.path.exists('data/interim/' + dataset):
     preprocessDataset(dataset)
@@ -66,29 +71,30 @@ def generateDataset(dataset, snap_size, train_per=0.5, anomaly_per=0.01):
     comments='%',
     delimiter=' '
   )
-  edges = edges[:, 0:2].astype(dtype=int)
-  vertices = np.unique(edges)
+  edges = edges[:, 0:2].astype(dtype=int)     # [E, 2] (E=13838 for uci)
+  vertices = np.unique(edges)   # [N] start from 0
   m = len(edges)
   n = len(vertices)
 
   t0 = time.time()
+  # train: [E*train_per, 2] 训练集的边
   synthetic_test, train_mat, train = anomaly_generation(train_per, anomaly_per, edges, n, m, seed=1)
 
   print("Anomaly Generation finish! Time: %.2f s"%(time.time()-t0))
   t0 = time.time()
-
+  # 添加反向边和自环?
   train_mat = (train_mat + train_mat.transpose() + sparse.eye(n)).tolil()
-  headtail = train_mat.rows
+  headtail = train_mat.rows   # 邻接表? List[List[]], [N, ?]
   del train_mat
 
-  train_size = int(len(train) / snap_size + 0.5)
+  train_size = int(len(train) / snap_size + 0.5)    # 训练集的snapshot数量?
   test_size = int(len(synthetic_test) / snap_size + 0.5)
   print("Train size:%d  %d  Test size:%d %d" %
         (len(train), train_size, len(synthetic_test), test_size))
-  rows = []
-  cols = []
-  weis = []
-  labs = []
+  rows = []     # [S, ?], src
+  cols = []     # [S, ?], dst
+  weis = []     # [S, ?], 好像全是1? 边的权重
+  labs = []     # [S, ?], label, 训练集全0, 测试集中的异常样本为1
   for ii in range(train_size):
     start_loc = ii * snap_size
     end_loc = (ii + 1) * snap_size
@@ -132,6 +138,7 @@ if __name__ == '__main__':
   parser.add_argument('--train_per', type=float, default=0.5)
   args = parser.parse_args()
 
+  # 每个snapshot中包含边的数量
   snap_size_dict = {'uci':1000, 'digg':6000, 'btc_alpha':1000, 'btc_otc':2000}
 
   if args.anomaly_per is None:
@@ -141,3 +148,4 @@ if __name__ == '__main__':
 
   for anomaly_per in anomaly_pers:
     generateDataset(args.dataset, snap_size_dict[args.dataset], train_per=args.train_per, anomaly_per=anomaly_per)
+

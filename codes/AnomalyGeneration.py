@@ -5,6 +5,18 @@ from sklearn.cluster import SpectralClustering
 
 
 def anomaly_generation(ini_graph_percent, anomaly_percent, data, n, m, seed = 1):
+  '''
+  Args:
+    ini_graph_percent: 训练集边的比例 e.g. 0.5
+    anomaly_percent: 注入异常的比例
+    data: edges [E, 2]
+    n: 节点数量 N
+    m: 边数量 E
+  Returns:
+    synthetic_test: [E_test + E_ano, 3], 前两维是edge的两侧节点, 第三位是01标签, 1表示为注入的异常
+    train_mat: [N, N] 邻接矩阵
+    train: [E*train_per, 2] 训练集的边
+  '''
   np.random.seed(seed)
   print('[#s] generating anomalous dataset...\n', datetime.datetime.now())
   print('[#s] initial network edge percent: #.1f##, anomaly percent: #.1f##.\n', datetime.datetime.now(),
@@ -20,7 +32,7 @@ def anomaly_generation(ini_graph_percent, anomaly_percent, data, n, m, seed = 1)
   # select the other edges as the testing set
   test = data[train_num:, :]
 
-  #data to adjacency_matrix
+  # data to adjacency_matrix
   adjacency_matrix = edgeList2Adj(data)
 
   # clustering nodes to clusters using spectral clustering
@@ -29,8 +41,7 @@ def anomaly_generation(ini_graph_percent, anomaly_percent, data, n, m, seed = 1)
   labels = sc.fit_predict(adjacency_matrix)
 
 
-  # generate fake edges that are not exist in the whole graph, treat them as
-  # anamalies
+  # generate fake edges that are not exist in the whole graph, treat them as anomalies
   idx_1 = np.expand_dims(np.transpose(np.random.choice(n, m)), axis=1)
   idx_2 = np.expand_dims(np.transpose(np.random.choice(n, m)), axis=1)
   generate_edges = np.concatenate((idx_1, idx_2), axis=1)
@@ -41,11 +52,11 @@ def anomaly_generation(ini_graph_percent, anomaly_percent, data, n, m, seed = 1)
   fake_edges = processEdges(fake_edges, data)
 
 
-  #anomaly_num = 12#int(np.floor(anomaly_percent * np.size(test, 0)))
+  # anomaly_num = 12#int(np.floor(anomaly_percent * np.size(test, 0)))
   anomaly_num = int(np.floor(anomaly_percent * np.size(test, 0)))
   anomalies = fake_edges[0:anomaly_num, :]
 
-  idx_test = np.zeros([np.size(test, 0) + anomaly_num, 1], dtype=np.int32)
+  idx_test = np.zeros([np.size(test, 0) + anomaly_num, 1], dtype=np.int32)    # [E_test + E_ano, 1] 标签?
   # randsample: sample without replacement
   # it's different from datasample!
 
@@ -56,8 +67,8 @@ def anomaly_generation(ini_graph_percent, anomaly_percent, data, n, m, seed = 1)
   idx_test[anomaly_pos] = 1
   synthetic_test = np.concatenate((np.zeros([np.size(idx_test, 0), 2], dtype=np.int32), idx_test), axis=1)
 
-  idx_anomalies = np.nonzero(idx_test.squeeze() == 1)
-  idx_normal = np.nonzero(idx_test.squeeze() == 0)
+  idx_anomalies = np.nonzero(idx_test.squeeze() == 1)   # 异常样本在idx_test中的索引
+  idx_normal = np.nonzero(idx_test.squeeze() == 0)      # 正常样本(测试集样本)在idx_test中的索引
 
   synthetic_test[idx_anomalies, 0:2] = anomalies
   synthetic_test[idx_normal, 0:2] = test

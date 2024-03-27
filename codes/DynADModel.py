@@ -53,8 +53,8 @@ class DynADModel(BertPreTrainedModel):
   def evaluate(self, trues, preds):
     aucs = {}
     for snap in range(len(self.data['snap_test'])):
-        auc = metrics.roc_auc_score(trues[snap],preds[snap])
-        aucs[snap] = auc
+      auc = metrics.roc_auc_score(trues[snap],preds[snap])
+      aucs[snap] = auc
 
     trues_full = np.hstack(trues)
     preds_full = np.hstack(preds)
@@ -65,7 +65,7 @@ class DynADModel(BertPreTrainedModel):
   def generate_embedding(self, edges):
     num_snap = len(edges)
     # WL_dict = compute_WL(self.data['idx'], np.vstack(edges[:7]))
-    WL_dict = compute_zero_WL(self.data['idx'],  np.vstack(edges[:7]))
+    WL_dict = compute_zero_WL(self.data['idx'],  np.vstack(edges[:7]))    # 7是什么鬼, 似乎是train_snapshot的数量
     batch_hop_dicts = compute_batch_hop(self.data['idx'], edges, num_snap, self.data['S'], self.config.k, self.config.window_size)
     raw_embeddings, wl_embeddings, hop_embeddings, int_embeddings, time_embeddings = \
         dicts_to_embeddings(self.data['X'], batch_hop_dicts, WL_dict, num_snap)
@@ -90,7 +90,7 @@ class DynADModel(BertPreTrainedModel):
   def train_model(self, max_epoch):
 
     optimizer = optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
-    raw_embeddings, wl_embeddings, hop_embeddings, int_embeddings, time_embeddings = self.generate_embedding(self.data['edges'])
+    raw_embeddings, wl_embeddings, hop_embeddings, int_embeddings, time_embeddings = self.generate_embedding(self.data['edges']) # [S, E], S=snapshot数量, E=snapshot中边的数量, 不知道为什么s0是None
     self.data['raw_embeddings'] = None
 
     ns_function = self.negative_sampling
@@ -101,7 +101,7 @@ class DynADModel(BertPreTrainedModel):
       # -------------------------
       negatives = ns_function(self.data['edges'][:max(self.data['snap_train']) + 1])
       raw_embeddings_neg, wl_embeddings_neg, hop_embeddings_neg, int_embeddings_neg, \
-      time_embeddings_neg = self.generate_embedding(negatives)
+          time_embeddings_neg = self.generate_embedding(negatives)    
       self.train()
 
       loss_train = 0
@@ -109,10 +109,10 @@ class DynADModel(BertPreTrainedModel):
 
         if wl_embeddings[snap] is None:
           continue
-        int_embedding_pos = int_embeddings[snap]
+        int_embedding_pos = int_embeddings[snap]    # [E, 14] ???14又是什么
         hop_embedding_pos = hop_embeddings[snap]
         time_embedding_pos = time_embeddings[snap]
-        y_pos = self.data['y'][snap].float()
+        y_pos = self.data['y'][snap].float()            # 正样本标签
 
         int_embedding_neg = int_embeddings_neg[snap]
         hop_embedding_neg = hop_embeddings_neg[snap]

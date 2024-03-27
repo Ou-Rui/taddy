@@ -53,6 +53,6 @@ method_obj.lr = args.lr
 setting_obj = Settings()
 
 setting_obj.prepare(data_obj, method_obj)
-setting_obj.run()
+result_dict = setting_obj.run()
 
 print('$$$$ Finish $$$$')

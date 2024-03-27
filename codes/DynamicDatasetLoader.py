@@ -151,16 +151,19 @@ class DynamicDatasetLoader(dataset):
           eigen_adjs_sparse.append(sp.csr_matrix(eigen_adj))
 
       else:
-          eigen_adjs.append(None)
+        eigen_adjs.append(None)
 
       if generate_eigen:
         with open(eigen_file_name, 'wb') as f:
           pickle.dump(eigen_adjs_sparse, f, pickle.HIGHEST_PROTOCOL)
 
-      return adjs, eigen_adjs
+    return adjs, eigen_adjs
 
   def load(self):
-    """Load dynamic network dataset"""
+    """
+    Load dynamic network dataset
+    called in Settings.py
+    """
 
     print('Loading {} dataset...'.format(self.dataset_name))
     with open('data/percent/' + self.dataset_name + '_' + str(self.train_per) + '_' + str(self.anomaly_per) + '.pkl', 'rb') as f:
