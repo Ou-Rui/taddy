@@ -6,6 +6,8 @@ from transformers.modeling_bert import BertPreTrainedModel
 from codes.BaseModel import BaseModel
 
 import time
+import os
+import pickle
 import numpy as np
 
 from sklearn import metrics
@@ -72,6 +74,10 @@ class DynADModel(BertPreTrainedModel):
     return raw_embeddings, wl_embeddings, hop_embeddings, int_embeddings, time_embeddings
 
   def negative_sampling(self, edges):
+    '''
+    edges: [S_train, [E_S, 2]] 训练集的边
+    '''
+    
     negative_edges = []
     node_list = self.data['idx']
     num_node = node_list.shape[0]
@@ -90,7 +96,22 @@ class DynADModel(BertPreTrainedModel):
   def train_model(self, max_epoch):
 
     optimizer = optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
-    raw_embeddings, wl_embeddings, hop_embeddings, int_embeddings, time_embeddings = self.generate_embedding(self.data['edges']) # [S, E], S=snapshot数量, E=snapshot中边的数量, 不知道为什么s0是None
+    
+    embedding_filename = f'./data/embedding/{self.args.dataset}.pkl'
+    raw_embeddings, wl_embeddings, hop_embeddings, int_embeddings, time_embeddings = None, None, None, None, None
+    if not os.path.exists(embedding_filename):
+      print(f'Embedding file not found. Generating embeddings....')
+      raw_embeddings, wl_embeddings, hop_embeddings, int_embeddings, time_embeddings = self.generate_embedding(self.data['edges']) # [S, [E_S, 14]] 第一项是None, int不是E_S??
+      print(f'Generate Done')
+      with open(embedding_filename, 'wb') as f:
+        pickle.dump((raw_embeddings, wl_embeddings, hop_embeddings, int_embeddings, time_embeddings), f, pickle.HIGHEST_PROTOCOL)
+      print(f'Dump Done!')
+    else:
+      print(f'Loading Embedding {embedding_filename}...')
+      with open(embedding_filename, 'rb') as f:
+        raw_embeddings, wl_embeddings, hop_embeddings, int_embeddings, time_embeddings = pickle.load(f)
+      print(f'Loaded!')
+        
     self.data['raw_embeddings'] = None
 
     ns_function = self.negative_sampling
@@ -99,9 +120,25 @@ class DynADModel(BertPreTrainedModel):
       t_epoch_begin = time.time()
 
       # -------------------------
-      negatives = ns_function(self.data['edges'][:max(self.data['snap_train']) + 1])
-      raw_embeddings_neg, wl_embeddings_neg, hop_embeddings_neg, int_embeddings_neg, \
-          time_embeddings_neg = self.generate_embedding(negatives)    
+      embedding_neg_filename = f'./data/embedding/{self.args.dataset}_neg_{self.args.train_per}_{self.args.anomaly_per}.pkl'
+      negatives = None
+      raw_embeddings_neg, wl_embeddings_neg, hop_embeddings_neg, int_embeddings_neg, time_embeddings_neg = None, None, None, None, None
+      if not os.path.exists(embedding_neg_filename):
+        print(f'Negtive Embedding file not found. Generating embeddings....')
+        negatives = ns_function(self.data['edges'][:max(self.data['snap_train']) + 1])
+        raw_embeddings_neg, wl_embeddings_neg, hop_embeddings_neg, int_embeddings_neg, time_embeddings_neg = self.generate_embedding(negatives)    
+        print(f'Generate Done')
+        with open(embedding_neg_filename, 'wb') as f:
+          pickle.dump((negatives, raw_embeddings_neg, wl_embeddings_neg, hop_embeddings_neg, int_embeddings_neg, time_embeddings_neg),
+                      f, pickle.HIGHEST_PROTOCOL)
+        print(f'Dump Done!')
+      else:
+        print(f'Loading Negative Embedding {embedding_neg_filename}...')
+        with open(embedding_neg_filename, 'rb') as f:
+          negatives, raw_embeddings_neg, wl_embeddings_neg, hop_embeddings_neg, int_embeddings_neg, time_embeddings_neg = pickle.load(f)
+        print(f'Loaded!')
+          
+
       self.train()
 
       loss_train = 0
@@ -109,13 +146,13 @@ class DynADModel(BertPreTrainedModel):
 
         if wl_embeddings[snap] is None:
           continue
-        int_embedding_pos = int_embeddings[snap]    # [E, 14] ???14又是什么
-        hop_embedding_pos = hop_embeddings[snap]
+        int_embedding_pos = int_embeddings[snap]    # [E, 14] ???14又是什么 wiki [1668, 14]????
+        hop_embedding_pos = hop_embeddings[snap]    # 
         time_embedding_pos = time_embeddings[snap]
         y_pos = self.data['y'][snap].float()            # 正样本标签
 
-        int_embedding_neg = int_embeddings_neg[snap]
-        hop_embedding_neg = hop_embeddings_neg[snap]
+        int_embedding_neg = int_embeddings_neg[snap]  # wiki [7993, 14], uci [997, 14]???
+        hop_embedding_neg = hop_embeddings_neg[snap] 
         time_embedding_neg = time_embeddings_neg[snap]
         y_neg = torch.ones(int_embedding_neg.size()[0])
 

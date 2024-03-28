@@ -39,7 +39,7 @@ def preprocessDataset(dataset):
   edges = edges[np.nonzero([x[0] != x[1] for x in edges])].tolist()
   aa, idx = np.unique(edges, return_index=True, axis=0)
   edges = np.array(edges)
-  edges = edges[np.sort(idx)]
+  edges = edges[np.sort(idx)]   # 这里好像去重了...
 
   vertexs, edges = np.unique(edges, return_inverse=True)
   edges = np.reshape(edges, [-1, 2])
@@ -57,7 +57,7 @@ def preprocessDataset(dataset):
 
 def generateDataset(dataset, snap_size, train_per=0.5, anomaly_per=0.01):
   '''
-  snap_size: snapshot数量
+  snap_size: 单个snapshot中边的数量
   train_per: 训练集边占总数的比例
   '''
   

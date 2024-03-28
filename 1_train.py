@@ -1,3 +1,7 @@
+'''
+python 1_train.py --dataset uci --anomaly_per 0.1
+python 1_train.py --dataset wikipedia --anomaly_per 0.1 --train_per 0.7
+'''
 from codes.DynamicDatasetLoader import DynamicDatasetLoader
 from codes.Component import MyConfig
 from codes.DynADModel import DynADModel
@@ -7,7 +11,7 @@ import torch
 import argparse
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--dataset', type=str, choices=['uci', 'digg', 'btc_alpha', 'btc_otc'], default='uci')
+parser.add_argument('--dataset', type=str, choices=['uci', 'digg', 'btc_alpha', 'btc_otc', 'wikipedia'], default='uci')
 parser.add_argument('--anomaly_per', choices=[0.01, 0.05, 0.1], type=float, default=0.1)
 parser.add_argument('--train_per', type=float, default=0.5)
 

@@ -153,9 +153,9 @@ class DynamicDatasetLoader(dataset):
       else:
         eigen_adjs.append(None)
 
-      if generate_eigen:
-        with open(eigen_file_name, 'wb') as f:
-          pickle.dump(eigen_adjs_sparse, f, pickle.HIGHEST_PROTOCOL)
+    if generate_eigen:
+      with open(eigen_file_name, 'wb') as f:
+        pickle.dump(eigen_adjs_sparse, f, pickle.HIGHEST_PROTOCOL)
 
     return adjs, eigen_adjs
 
@@ -184,6 +184,15 @@ class DynamicDatasetLoader(dataset):
     index_id_map = {i:i for i in idx}
     idx = np.array(idx)
 
-    return {'X': None, 'A': adjs, 'S': eigen_adjs, 'index_id_map': index_id_map, 'edges': edges,
-            'y': labels, 'idx': idx, 'snap_train': snap_train, 'degrees': degrees,
-            'snap_test': snap_test, 'num_snap': num_snap}
+    return {'X': None, 
+            'A': adjs,        # [S, [N, N]] 每个snapshot的邻接矩阵
+            'S': eigen_adjs,  # [S, [N, N]] 每个snapshot的特征矩阵???
+            'index_id_map': index_id_map, 
+            'edges': edges,   # [S, [E_S, 2]]
+            'y': labels,      # [S, E_S]
+            'idx': idx,       # [N], 0~N-1的节点编号列表
+            'snap_train': snap_train, # [S_train]
+            'degrees': degrees,     # [N]
+            'snap_test': snap_test, # [S_test]
+            'num_snap': num_snap    # [S]
+            }
