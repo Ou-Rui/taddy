@@ -25,6 +25,7 @@ class MyConfig(PretrainedConfig):
     batch_size = 256,
     window_size = 1,
     weight_decay = 5e-4,
+    dataset = '',
     **kwargs
   ):
     super(MyConfig, self).__init__(**kwargs)
@@ -44,6 +45,7 @@ class MyConfig(PretrainedConfig):
     self.batch_size = batch_size
     self.window_size = window_size
     self.weight_decay = weight_decay
+    self.dataset = dataset
 
 class TransformerEncoder(nn.Module):
   def __init__(self, config):
@@ -87,14 +89,33 @@ class EdgeEncoding(nn.Module):
 
     self.LayerNorm = TransformerLayerNorm(config.hidden_size, eps=config.layer_norm_eps)
     self.dropout = nn.Dropout(config.hidden_dropout_prob)
+    
+    linear_raw_dim = 0
+    if config.dataset in ('wikipedia', 'reddit'):
+      linear_raw_dim = 172
+    elif config.dataset == 'mooc':
+      linear_raw_dim = 4
+    elif config.dataset in ('txn', 'txn_filter'):
+      linear_raw_dim = 7
+      
+    self.linear_raw = None
+    if linear_raw_dim > 0:
+      self.linear_raw = nn.Linear(linear_raw_dim, config.hidden_size)
 
-  def forward(self, init_pos_ids=None, hop_dis_ids=None, time_dis_ids=None):
+  def forward(self, raw_embeddings=None, init_pos_ids=None, hop_dis_ids=None, time_dis_ids=None):
+      
 
     position_embeddings = self.inti_pos_embeddings(init_pos_ids)
     hop_embeddings = self.hop_dis_embeddings(hop_dis_ids)
     time_embeddings = self.hop_dis_embeddings(time_dis_ids)
-
+    
     embeddings = position_embeddings + hop_embeddings + time_embeddings
+    if raw_embeddings is not None:
+      assert self.linear_raw is not None
+      raw_embeddings = self.linear_raw(raw_embeddings)
+      raw_embeddings = raw_embeddings.unsqueeze(1).expand(-1, position_embeddings.shape[1], -1)
+      embeddings = embeddings + raw_embeddings
+
     embeddings = self.LayerNorm(embeddings)
     embeddings = self.dropout(embeddings)
     return embeddings

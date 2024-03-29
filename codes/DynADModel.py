@@ -33,9 +33,9 @@ class DynADModel(BertPreTrainedModel):
     self.weight_decay = config.weight_decay
     self.init_weights()
 
-  def forward(self, init_pos_ids, hop_dis_ids, time_dis_ids, idx=None):
+  def forward(self, raw_embedding, init_pos_ids, hop_dis_ids, time_dis_ids, idx=None):
 
-    outputs = self.transformer(init_pos_ids, hop_dis_ids, time_dis_ids)
+    outputs = self.transformer(raw_embedding, init_pos_ids, hop_dis_ids, time_dis_ids)
 
     sequence_output = 0
     for i in range(self.config.k+1):
@@ -64,20 +64,22 @@ class DynADModel(BertPreTrainedModel):
     
     return aucs, auc_full
 
-  def generate_embedding(self, edges):
+  def generate_embedding(self, edges, negative_flag=False):
     num_snap = len(edges)
     # WL_dict = compute_WL(self.data['idx'], np.vstack(edges[:7]))
     WL_dict = compute_zero_WL(self.data['idx'],  np.vstack(edges[:7]))    # 7是什么鬼, 似乎是train_snapshot的数量
     batch_hop_dicts = compute_batch_hop(self.data['idx'], edges, num_snap, self.data['S'], self.config.k, self.config.window_size)
+    
+    use_raw_feat = self.config.dataset in ('wikipedia', 'reddit', 'mooc', 'txn_filter')
     raw_embeddings, wl_embeddings, hop_embeddings, int_embeddings, time_embeddings = \
-        dicts_to_embeddings(self.data['X'], batch_hop_dicts, WL_dict, num_snap)
+        dicts_to_embeddings(self.data['X'], batch_hop_dicts, WL_dict, num_snap, 
+                            use_raw_feat=use_raw_feat, negative_flag=negative_flag)
     return raw_embeddings, wl_embeddings, hop_embeddings, int_embeddings, time_embeddings
 
   def negative_sampling(self, edges):
     '''
     edges: [S_train, [E_S, 2]] 训练集的边
     '''
-    
     negative_edges = []
     node_list = self.data['idx']
     num_node = node_list.shape[0]
@@ -115,7 +117,8 @@ class DynADModel(BertPreTrainedModel):
     self.data['raw_embeddings'] = None
 
     ns_function = self.negative_sampling
-
+    
+    # Epoch Loop
     for epoch in range(max_epoch):
       t_epoch_begin = time.time()
 
@@ -124,7 +127,7 @@ class DynADModel(BertPreTrainedModel):
       negatives = None
       raw_embeddings_neg, wl_embeddings_neg, hop_embeddings_neg, int_embeddings_neg, time_embeddings_neg = None, None, None, None, None
       if not os.path.exists(embedding_neg_filename):
-        print(f'Negtive Embedding file not found. Generating embeddings....')
+        print(f'Negative Embedding file not found. Generating embeddings....')
         negatives = ns_function(self.data['edges'][:max(self.data['snap_train']) + 1])
         raw_embeddings_neg, wl_embeddings_neg, hop_embeddings_neg, int_embeddings_neg, time_embeddings_neg = self.generate_embedding(negatives)    
         print(f'Generate Done')
@@ -142,34 +145,45 @@ class DynADModel(BertPreTrainedModel):
       self.train()
 
       loss_train = 0
+      # Train Snap Loop
       for snap in self.data['snap_train']:
-
         if wl_embeddings[snap] is None:
           continue
+        # raw_embedding_pos = raw_embeddings[snap]
         int_embedding_pos = int_embeddings[snap]    # [E, 14] ???14又是什么 wiki [1668, 14]????
         hop_embedding_pos = hop_embeddings[snap]    # 
         time_embedding_pos = time_embeddings[snap]
         y_pos = self.data['y'][snap].float()            # 正样本标签
 
+        # raw_embedding_neg = raw_embeddings_neg[snap]
         int_embedding_neg = int_embeddings_neg[snap]  # wiki [7993, 14], uci [997, 14]???
         hop_embedding_neg = hop_embeddings_neg[snap] 
         time_embedding_neg = time_embeddings_neg[snap]
         y_neg = torch.ones(int_embedding_neg.size()[0])
 
+        # raw_embedding = torch.vstack((raw_embedding_pos, raw_embedding_neg))
         int_embedding = torch.vstack((int_embedding_pos, int_embedding_neg))
         hop_embedding = torch.vstack((hop_embedding_pos, hop_embedding_neg))
         time_embedding = torch.vstack((time_embedding_pos, time_embedding_neg))
         y = torch.hstack((y_pos, y_neg))
+        
+        if self.config.dataset in ('wikipedia', 'reddit', 'mooc', 'txn', 'txn_filter'):
+          raw_embedding_pos = raw_embeddings[snap]
+          raw_embedding_neg = raw_embeddings_neg[snap]
+          raw_embedding = torch.vstack((raw_embedding_pos, raw_embedding_neg))
+        else:
+          raw_embedding = None
 
         optimizer.zero_grad()
 
-        output = self.forward(int_embedding, hop_embedding, time_embedding).squeeze()
+        output = self.forward(raw_embedding, int_embedding, hop_embedding, time_embedding).squeeze()
         loss = F.binary_cross_entropy_with_logits(output, y)
         loss.backward()
         optimizer.step()
 
         loss_train += loss.detach().item()
-
+      # End Train Snap Loop
+      
       loss_train /= len(self.data['snap_train']) - self.config.window_size + 1
       print('Epoch: {}, loss:{:.4f}, Time: {:.4f}s'.format(epoch + 1, loss_train, time.time() - t_epoch_begin))
 
@@ -180,9 +194,14 @@ class DynADModel(BertPreTrainedModel):
           int_embedding = int_embeddings[snap]
           hop_embedding = hop_embeddings[snap]
           time_embedding = time_embeddings[snap]
+          
+          if self.config.dataset in ('wikipedia', 'reddit', 'mooc', 'txn', 'txn_filter'):
+            raw_embedding = raw_embeddings[snap]
+          else:
+            raw_embedding = None
 
           with torch.no_grad():
-            output = self.forward(int_embedding, hop_embedding, time_embedding, None)
+            output = self.forward(raw_embedding, int_embedding, hop_embedding, time_embedding, None)
             output = torch.sigmoid(output)
           pred = output.squeeze().numpy()
           preds.append(pred)
@@ -195,7 +214,9 @@ class DynADModel(BertPreTrainedModel):
         for i in range(len(self.data['snap_test'])):
           print("Snap: %02d | AUC: %.4f" % (self.data['snap_test'][i], aucs[i]))
         print('TOTAL AUC:{:.4f}'.format(auc_full))
-
+    # End Epoch Loop
+    
+    
   def run(self):
     self.train_model(self.max_epoch)
     return self.learning_record_dict

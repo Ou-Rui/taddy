@@ -47,7 +47,8 @@ data_obj.compute_s = True
 
 my_config = MyConfig(k=args.neighbor_num, window_size=args.window_size, hidden_size=args.embedding_dim,
                      intermediate_size=args.embedding_dim, num_attention_heads=args.num_attention_heads,
-                     num_hidden_layers=args.num_hidden_layers, weight_decay=args.weight_decay)
+                     num_hidden_layers=args.num_hidden_layers, weight_decay=args.weight_decay,
+                     dataset=args.dataset)
 
 method_obj = DynADModel(my_config, args)
 method_obj.spy_tag = True

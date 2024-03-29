@@ -29,7 +29,9 @@ class BaseModel(BertPreTrainedModel):
       self.encoder.layer[layer].attention.prune_heads(heads)
 
   def setting_preparation(self, input_ids=None, attention_mask=None, token_type_ids=None, position_ids=None, head_mask=None, inputs_embeds=None, encoder_hidden_states=None, encoder_attention_mask=None,):
-
+    """
+    no use
+    """
     if input_ids is not None and inputs_embeds is not None:
       raise ValueError("You cannot specify both input_ids and inputs_embeds at the same time")
     elif input_ids is not None:
@@ -104,13 +106,13 @@ class BaseModel(BertPreTrainedModel):
     return token_type_ids, extended_attention_mask, encoder_extended_attention_mask, head_mask
 
 
-  def forward(self, init_pos_ids, hop_dis_ids, time_dis_ids, head_mask=None):
+  def forward(self, raw_embeddings, init_pos_ids, hop_dis_ids, time_dis_ids, head_mask=None):
     if head_mask is None:
       head_mask = [None] * self.config.num_hidden_layers
 
-    embedding_output = self.embeddings(init_pos_ids=init_pos_ids,
-                                        hop_dis_ids=hop_dis_ids, time_dis_ids=time_dis_ids)
-    encoder_outputs = self.encoder(embedding_output, head_mask=head_mask) #这里的输出是tuple，因为在某些设定下要输出别的信息（中间分析用）
+    embedding_output = self.embeddings(raw_embeddings=raw_embeddings, init_pos_ids=init_pos_ids,
+                                       hop_dis_ids=hop_dis_ids, time_dis_ids=time_dis_ids)
+    encoder_outputs = self.encoder(embedding_output, head_mask=head_mask)   # 这里的输出是tuple，因为在某些设定下要输出别的信息（中间分析用）
     sequence_output = encoder_outputs[0]
     pooled_output = self.pooler(sequence_output)
     outputs = (sequence_output, pooled_output,) + encoder_outputs[1:]

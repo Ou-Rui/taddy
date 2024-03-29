@@ -92,21 +92,28 @@ def compute_batch_hop(node_list, edges_all, num_snap, Ss, k=5, window_size=1):
   return batch_hop_dicts
 
 # Dict to embeddings
-def dicts_to_embeddings(feats, batch_hop_dicts, wl_dict, num_snap, use_raw_feat=False):
+def dicts_to_embeddings(feats, batch_hop_dicts, wl_dict, num_snap, use_raw_feat=False, negative_flag=False):
   '''
   Args:
-    feat: 似乎与raw_embedding相关, 目前是False
+    feat: [S, [E_S, d_E]]
     batch_hop_dicts: compute_batch_hop()计算的dict
     wl_dict: compute_zero_WL计算的dict, 与wl_embedding相关, 目前无用
     num_snap: S
     use_raw_feat: 边特征? 目前是False
+  Returns:
+    raw_embeddings: [S, []]
+    wl_embeddings, 
+    hop_embeddings, 
+    int_embeddings, 
+    time_embeddings
   '''
   raw_embeddings = []
   wl_embeddings = []
   hop_embeddings = []
   int_embeddings = []
   time_embeddings = []
-
+  
+  # Snapshot Loop
   for snap in range(num_snap):
     batch_hop_dict = batch_hop_dicts[snap]
 
@@ -123,13 +130,15 @@ def dicts_to_embeddings(feats, batch_hop_dicts, wl_dict, num_snap, use_raw_feat=
     position_ids_list = []
     hop_ids_list = []
     time_ids_list = []
-
+    
+    # Edge Loop (within a snapshot)
     for edge_idx in batch_hop_dict:
       neighbors_list = batch_hop_dict[edge_idx]
       edge = edge_idx.split('_')[1:]
       edge[0], edge[1] = int(edge[0]), int(edge[1])   # 取出batch_hop_dict中的两端节点编号
+      snap_eid = int(edge[2])   # snapshot中的edge索引
 
-      raw_features = []
+      raw_features = None
       role_ids = []
       position_ids = []
       hop_ids = []
@@ -137,9 +146,11 @@ def dicts_to_embeddings(feats, batch_hop_dicts, wl_dict, num_snap, use_raw_feat=
 
       for neighbor, intimacy_rank, hop, time in neighbors_list:
         if use_raw_feat:
-          raw_features.append(feats[snap-time][neighbor])
+          raw_features = feats[snap][snap_eid]
+          # raw_features.append(feats[snap-time][neighbor])
         else:
-          raw_features.append(None)
+          raw_features = None
+          # raw_features.append(None)
         role_ids.append(wl_dict[neighbor])
         hop_ids.append(hop)
         position_ids.append(intimacy_rank)
@@ -150,11 +161,17 @@ def dicts_to_embeddings(feats, batch_hop_dicts, wl_dict, num_snap, use_raw_feat=
       position_ids_list.append(position_ids)
       hop_ids_list.append(hop_ids)
       time_ids_list.append(time_ids)
-
+    # End Edge Loop (within a snapshot)
+    
     if use_raw_feat:
+      # raw_embedding = torch.FloatTensor(raw_features_list)
       raw_embedding = torch.FloatTensor(raw_features_list)
+      # 如果是负采样, 就让边特征全0
+      if negative_flag:
+        raw_embedding = torch.zeros_like(raw_embedding, dtype=torch.float32)
     else:
       raw_embedding = None
+      
     wl_embedding = torch.LongTensor(role_ids_list)
     hop_embedding = torch.LongTensor(hop_ids_list)
     int_embedding = torch.LongTensor(position_ids_list)
@@ -165,5 +182,6 @@ def dicts_to_embeddings(feats, batch_hop_dicts, wl_dict, num_snap, use_raw_feat=
     hop_embeddings.append(hop_embedding)
     int_embeddings.append(int_embedding)
     time_embeddings.append(time_embedding)
-
+  # End Snapshot Loop
+  
   return raw_embeddings, wl_embeddings, hop_embeddings, int_embeddings, time_embeddings

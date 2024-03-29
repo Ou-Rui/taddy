@@ -48,33 +48,33 @@ def reindex(src_l, dst_l):
 
 def read_csv(path):
   src_l, dst_l, label_l = [], [], []
+  feat_l = []
   with open(path) as f:
     s = next(f)
     for idx, line in enumerate(f):
       e = line.strip().split(',')
       src = int(e[0])
       dst = int(e[1])
-
       # ts = float(e[2])
       label = int(e[3])
-
-      # feat = np.array([float(x) for x in e[4:]])
+      feat = np.array([float(x) for x in e[4:]])
 
       src_l.append(src)
       dst_l.append(dst)
       label_l.append(label)
+      feat_l.append(feat)
   
   src_l, dst_l = reindex(src_l, dst_l)
-  return src_l, dst_l, label_l
+  return src_l, dst_l, label_l, feat_l
 
 ''' main '''
-src_l, dst_l, label_l = read_csv(DATASET_PATH)
+src_l, dst_l, label_l, feat_l = read_csv(DATASET_PATH)
 N = max(max(src_l), max(dst_l)) + 1
 E = len(src_l)
 snapshot_size = math.ceil(E / num_snapshot / 1000) * 1000   # 在千位向上取整
 print(f'snapshot_size={snapshot_size}')
 
-snapshot_src_l, snapshot_dst_l, snapshot_label_l, snapshot_weight_l = [], [], [], []
+snapshot_src_l, snapshot_dst_l, snapshot_label_l, snapshot_weight_l, snapshot_feat_l = [], [], [], [], []
 train_adj_list = [ [i] for i in range(N) ]    # 初始添加自环
 for i_snapshot in range(num_snapshot):
   start_idx = i_snapshot * snapshot_size
@@ -84,11 +84,13 @@ for i_snapshot in range(num_snapshot):
   snapshot_dst = np.array(dst_l[start_idx:end_idx], dtype=np.int32)
   snapshot_label = np.array(label_l[start_idx:end_idx], dtype=np.int32)
   snapshot_weight = np.ones_like(snapshot_src, dtype=np.int32)
+  snapshot_feat = np.array(feat_l[start_idx:end_idx], dtype=np.float32)
   
   snapshot_src_l.append(snapshot_src)
   snapshot_dst_l.append(snapshot_dst)
   snapshot_label_l.append(snapshot_label)
   snapshot_weight_l.append(snapshot_weight)
+  snapshot_feat_l.append(snapshot_feat)
   
   if i_snapshot < num_snapshot_train:
     for src, dst in zip(snapshot_src, snapshot_dst):
@@ -105,6 +107,7 @@ with open(f'data/percent/{args.dataset}_{train_per}_0.1.pkl', 'wb') as f:
      snapshot_dst_l,
      snapshot_label_l,
      snapshot_weight_l,
+     snapshot_feat_l,
      train_adj_list,
      num_snapshot_train,
      num_snapshot_test,

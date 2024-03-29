@@ -167,7 +167,10 @@ class DynamicDatasetLoader(dataset):
 
     print('Loading {} dataset...'.format(self.dataset_name))
     with open('data/percent/' + self.dataset_name + '_' + str(self.train_per) + '_' + str(self.anomaly_per) + '.pkl', 'rb') as f:
-      rows, cols, labels, weights, headtail, train_size, test_size, nb_nodes, nb_edges = pickle.load(f)
+      if self.dataset_name in ('wikipedia', 'reddit', 'mooc'):
+        rows, cols, labels, weights, feats, headtail, train_size, test_size, nb_nodes, nb_edges = pickle.load(f)
+      else:
+        rows, cols, labels, weights, headtail, train_size, test_size, nb_nodes, nb_edges = pickle.load(f)
 
     degrees = np.array([len(x) for x in headtail])
     num_snap = test_size + train_size
@@ -184,7 +187,7 @@ class DynamicDatasetLoader(dataset):
     index_id_map = {i:i for i in idx}
     idx = np.array(idx)
 
-    return {'X': None, 
+    return {'X': feats,       # [S, [E_S, d]]
             'A': adjs,        # [S, [N, N]] 每个snapshot的邻接矩阵
             'S': eigen_adjs,  # [S, [N, N]] 每个snapshot的特征矩阵???
             'index_id_map': index_id_map, 
